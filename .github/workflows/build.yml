@@ -7,84 +7,26 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        config:
-        - name: Release
-          lower: release
-          
-        - name: Debug
-          lower: debug
-          
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - uses: actions/checkout@v4
 
     - name: Setup Java JDK
-      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+      uses: actions/setup-java@v4
       with:
         java-version: 21
         distribution: temurin
         cache: gradle
 
-    - name: Generate keystore file
-      run: echo ${{secrets.KEYSTORE_FILE}} | base64 -d > ~/release.keystore
-
     - name: Fix gradle permissions
       run: chmod +x ./gradlew
 
-    - name: Build project
-      run: |
-        ./gradlew app:assemble${{ matrix.config.name }} \
-          -Pandroid.injected.signing.store.file="$HOME/release.keystore" \
-          -Pandroid.injected.signing.store.password="${{secrets.KEYSTORE_PASSWORD}}" \
-          -Pandroid.injected.signing.key.alias="${{secrets.KEY_ALIAS}}" \
-          -Pandroid.injected.signing.key.password="${{secrets.KEY_PASSWORD}}"
-
-    - name: Rename universal apk
-      id: rename_apk_universal
-      run: |
-        SHORT_SHA=${GITHUB_SHA::7}
-        APK_PATH=${{github.workspace}}/app/build/outputs/apk/${{ matrix.config.lower }}/app-universal-${{ matrix.config.lower }}.apk
-        OUT_PATH=${{github.workspace}}/geode-launcher-${{ matrix.config.lower }}-$SHORT_SHA.apk
-        mv $APK_PATH $OUT_PATH
-        echo "path=$OUT_PATH" >> $GITHUB_OUTPUT
-
-    - name: Rename apk
-      id: rename_apk
-      run: |
-        SHORT_SHA=${GITHUB_SHA::7}
-        APK_PATH=${{github.workspace}}/app/build/outputs/apk/${{ matrix.config.lower }}/app-armeabi-v7a-${{ matrix.config.lower }}.apk
-        OUT_PATH=${{github.workspace}}/geode-launcher-${{ matrix.config.lower }}-android32-$SHORT_SHA.apk
-        mv $APK_PATH $OUT_PATH
-        echo "path=$OUT_PATH" >> $GITHUB_OUTPUT
-
-    - name: Rename mappings
-      id: rename_mappings
-      if: ${{ matrix.config.lower == 'release' }}
-      run: |
-        SHORT_SHA=${GITHUB_SHA::7}
-        MAPPING_PATH=${{github.workspace}}/app/build/outputs/mapping/${{ matrix.config.lower }}/mapping.txt
-        OUT_PATH=${{github.workspace}}/mapping-${{ matrix.config.lower }}-$SHORT_SHA.txt
-        mv $MAPPING_PATH $OUT_PATH
-        echo "path=$OUT_PATH" >> $GITHUB_OUTPUT
-
-    - name: Upload release build
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-      if: ${{ matrix.config.lower == 'release' }}
-      with:
-        name: geode-launcher-${{ matrix.config.lower }}
-        path: |
-          ${{ steps.rename_apk_universal.outputs.path }}
-          ${{ steps.rename_apk.outputs.path }}
-          ${{ steps.rename_mappings.outputs.path }}
+    - name: Build debug APK
+      run: ./gradlew app:assembleDebug
 
     - name: Upload debug build
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-      if: ${{ matrix.config.lower == 'debug' }}
+      uses: actions/upload-artifact@v4
       with:
-        name: geode-launcher-${{ matrix.config.lower }}
-        path: |
-          ${{ steps.rename_apk_universal.outputs.path }}
-          ${{ steps.rename_apk.outputs.path }}
+        name: geode-launcher-debug
+        path: app/build/outputs/apk/debug/*.apk
